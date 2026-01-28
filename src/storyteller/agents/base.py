@@ -1,45 +1,66 @@
 """Base agent class for LLM interactions."""
 
+import json
 from abc import ABC, abstractmethod
 from typing import Any
 
-import anthropic
-
 from storyteller.config import get_settings
+from storyteller.providers.base import ChatMessage, LLMProvider
 
 
 class BaseAgent(ABC):
     """
     Base class for AI agents in the system.
 
-    Provides common functionality for interacting with Claude API,
+    Provides common functionality for interacting with LLM providers,
     prompt management, and response handling.
+
+    Agents can use any configured LLM provider (Anthropic, OpenAI, Ollama, etc.)
+    through the provider abstraction layer.
     """
 
-    def __init__(self, model: str | None = None):
+    def __init__(self, provider: LLMProvider | None = None, role: str = "default"):
         """
         Initialize the agent.
 
         Args:
-            model: The Claude model to use. If None, uses config default.
+            provider: LLM provider to use. If None, uses configured provider for role.
+            role: Agent role for provider lookup (e.g., "storyteller", "archivist")
         """
         self.settings = get_settings()
-        self._model = model
-        self._client: anthropic.Anthropic | None = None
+        self._provider = provider
+        self._role = role
         self._total_tokens_used = 0
 
     @property
-    def client(self) -> anthropic.Anthropic:
-        """Get or create the Anthropic client."""
-        if self._client is None:
-            self._client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
-        return self._client
+    def provider(self) -> LLMProvider:
+        """Get the LLM provider for this agent."""
+        if self._provider is not None:
+            return self._provider
+
+        # Get provider from registry based on role
+        from storyteller.providers.registry import get_provider_for_role
+
+        try:
+            return get_provider_for_role(self._role)
+        except ValueError:
+            # Fall back to creating a default Anthropic provider
+            from storyteller.providers.anthropic_provider import (
+                AnthropicProvider,
+                create_anthropic_config,
+            )
+
+            config = create_anthropic_config(
+                api_key=self.settings.anthropic_api_key,
+                role=self._role,
+            )
+            self._provider = AnthropicProvider(config)
+            return self._provider
 
     @property
-    @abstractmethod
     def model(self) -> str:
         """The model this agent uses."""
-        pass
+        return self.provider.model
 
     @property
     @abstractmethod
@@ -53,36 +74,93 @@ class BaseAgent(ABC):
         return self._total_tokens_used
 
     def _build_messages(
-        self, user_message: str, context: list[dict[str, str]] | None = None
-    ) -> list[dict[str, Any]]:
+        self,
+        user_message: str,
+        context: list[dict[str, str]] | None = None,
+        system: str | None = None,
+    ) -> list[ChatMessage]:
         """
         Build the messages array for an API call.
 
         Args:
             user_message: The current user message
             context: Optional list of previous messages for context
+            system: Optional system prompt override
 
         Returns:
-            List of message dicts for the API
+            List of ChatMessage objects for the provider
         """
         messages = []
 
-        if context:
-            messages.extend(context)
+        # Add system prompt
+        sys_prompt = system or self.system_prompt
+        if sys_prompt:
+            messages.append(ChatMessage(role="system", content=sys_prompt))
 
-        messages.append({"role": "user", "content": user_message})
+        # Add context messages
+        if context:
+            for msg in context:
+                messages.append(ChatMessage(role=msg["role"], content=msg["content"]))
+
+        # Add current user message
+        messages.append(ChatMessage(role="user", content=user_message))
 
         return messages
 
     def _call_api(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage] | list[dict[str, Any]],
         max_tokens: int = 2048,
         temperature: float = 1.0,
         stop_sequences: list[str] | None = None,
     ) -> tuple[str, int]:
         """
-        Make an API call to Claude.
+        Make an API call to the LLM provider.
+
+        Args:
+            messages: The messages to send (ChatMessage list or dict list for backward compat)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            stop_sequences: Optional stop sequences
+
+        Returns:
+            Tuple of (response text, tokens used)
+        """
+        # Convert dict messages to ChatMessage if needed
+        if messages and isinstance(messages[0], dict):
+            messages = [
+                ChatMessage(role=m["role"], content=m["content"]) for m in messages
+            ]
+
+        if self.settings.log_prompts:
+            print(f"\n[PROMPT] Provider: {self.provider.name}")
+            print(f"[PROMPT] Messages: {messages}")
+
+        response = self.provider.generate_sync(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop_sequences=stop_sequences,
+        )
+
+        # Track token usage
+        self._total_tokens_used += response.tokens_used
+
+        if self.settings.log_responses:
+            print(f"\n[RESPONSE] {response.text[:500]}...")
+            print(f"[TOKENS] {response.tokens_used}")
+
+        return response.text, response.tokens_used
+
+    async def _call_api_async(
+        self,
+        messages: list[ChatMessage] | list[dict[str, Any]],
+        max_tokens: int = 2048,
+        temperature: float = 1.0,
+        stop_sequences: list[str] | None = None,
+    ) -> tuple[str, int]:
+        """
+        Make an async API call to the LLM provider.
 
         Args:
             messages: The messages to send
@@ -93,42 +171,35 @@ class BaseAgent(ABC):
         Returns:
             Tuple of (response text, tokens used)
         """
-        kwargs: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": max_tokens,
-            "system": self.system_prompt,
-            "messages": messages,
-            "temperature": temperature,
-        }
-
-        if stop_sequences:
-            kwargs["stop_sequences"] = stop_sequences
+        # Convert dict messages to ChatMessage if needed
+        if messages and isinstance(messages[0], dict):
+            messages = [
+                ChatMessage(role=m["role"], content=m["content"]) for m in messages
+            ]
 
         if self.settings.log_prompts:
-            print(f"\n[PROMPT] System: {self.system_prompt[:200]}...")
+            print(f"\n[PROMPT] Provider: {self.provider.name}")
             print(f"[PROMPT] Messages: {messages}")
 
-        response = self.client.messages.create(**kwargs)
-
-        # Extract text from response
-        text = ""
-        for block in response.content:
-            if hasattr(block, "text"):
-                text += block.text
+        response = await self.provider.generate(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop_sequences=stop_sequences,
+        )
 
         # Track token usage
-        tokens_used = response.usage.input_tokens + response.usage.output_tokens
-        self._total_tokens_used += tokens_used
+        self._total_tokens_used += response.tokens_used
 
         if self.settings.log_responses:
-            print(f"\n[RESPONSE] {text[:500]}...")
-            print(f"[TOKENS] {tokens_used}")
+            print(f"\n[RESPONSE] {response.text[:500]}...")
+            print(f"[TOKENS] {response.tokens_used}")
 
-        return text, tokens_used
+        return response.text, response.tokens_used
 
     def _call_api_json(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage] | list[dict[str, Any]],
         max_tokens: int = 4096,
         temperature: float = 0.5,
     ) -> tuple[dict[str, Any], int]:
@@ -145,11 +216,18 @@ class BaseAgent(ABC):
         Returns:
             Tuple of (parsed JSON dict, tokens used)
         """
-        import json
+        # Convert to ChatMessage if needed
+        if messages and isinstance(messages[0], dict):
+            messages = [
+                ChatMessage(role=m["role"], content=m["content"]) for m in messages
+            ]
 
         # Append instruction to return JSON
-        if messages and messages[-1]["role"] == "user":
-            messages[-1]["content"] += "\n\nRespond with valid JSON only."
+        if messages and messages[-1].role == "user":
+            messages[-1] = ChatMessage(
+                role="user",
+                content=messages[-1].content + "\n\nRespond with valid JSON only.",
+            )
 
         text, tokens = self._call_api(
             messages, max_tokens=max_tokens, temperature=temperature
@@ -166,6 +244,51 @@ class BaseAgent(ABC):
             return json.loads(text.strip()), tokens
         except json.JSONDecodeError as e:
             # Return error info if parsing fails
+            return {"error": f"JSON parse error: {e}", "raw_text": text}, tokens
+
+    async def _call_api_json_async(
+        self,
+        messages: list[ChatMessage] | list[dict[str, Any]],
+        max_tokens: int = 4096,
+        temperature: float = 0.5,
+    ) -> tuple[dict[str, Any], int]:
+        """
+        Make an async API call expecting JSON response.
+
+        Args:
+            messages: The messages to send
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+
+        Returns:
+            Tuple of (parsed JSON dict, tokens used)
+        """
+        # Convert to ChatMessage if needed
+        if messages and isinstance(messages[0], dict):
+            messages = [
+                ChatMessage(role=m["role"], content=m["content"]) for m in messages
+            ]
+
+        # Append instruction to return JSON
+        if messages and messages[-1].role == "user":
+            messages[-1] = ChatMessage(
+                role="user",
+                content=messages[-1].content + "\n\nRespond with valid JSON only.",
+            )
+
+        text, tokens = await self._call_api_async(
+            messages, max_tokens=max_tokens, temperature=temperature
+        )
+
+        # Try to parse JSON
+        try:
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+
+            return json.loads(text.strip()), tokens
+        except json.JSONDecodeError as e:
             return {"error": f"JSON parse error: {e}", "raw_text": text}, tokens
 
     @abstractmethod
