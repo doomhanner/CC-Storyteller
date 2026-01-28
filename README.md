@@ -36,35 +36,39 @@ cp .env.example .env
 
 ## Usage
 
-### Create a New Campaign
+### The Chronicle (GUI)
+
+Launch the graphical terminal interface:
 
 ```bash
+chronicle
+```
+
+This opens **The Chronicle**, a beautiful terminal UI featuring:
+- **Hall of Chronicles**: Browse and select your campaigns
+- **The Scriptorium**: Guided campaign creation wizard
+- **The Codex**: Browse the Entity Bible (characters, locations, items, factions, lore)
+- **Chronicle View**: Main gameplay screen with narrative display
+
+### CLI Commands
+
+For command-line usage:
+
+```bash
+# Create a new campaign (interactive wizard)
 storyteller new
-```
 
-This starts an interactive wizard to create your campaign. You can also use flags:
-
-```bash
+# Create with options
 storyteller new --name "Dark Fantasy" --creativity 0.7
-```
 
-### Play an Existing Campaign
-
-```bash
 # List campaigns
 storyteller list
 
 # Play a specific campaign
 storyteller play <campaign_id>
-```
 
-### View Entity Bible
-
-```bash
-# View all entities
+# View Entity Bible
 storyteller bible <campaign_id>
-
-# Filter by type
 storyteller bible <campaign_id> --type character
 ```
 
