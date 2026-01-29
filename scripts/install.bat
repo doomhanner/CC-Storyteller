@@ -17,23 +17,45 @@ cd /d "%~dp0.."
 echo [1/6] Checking prerequisites...
 echo.
 
-:: Check Python
+:: Check Python - try multiple commands (python, py, python3)
 echo Checking Python installation...
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Python is not installed or not in PATH.
-    echo.
-    echo Please install Python 3.10 or higher from:
-    echo   https://www.python.org/downloads/
-    echo.
-    echo Make sure to check "Add Python to PATH" during installation.
-    echo.
-    pause
-    exit /b 1
+set PYTHON_CMD=
+
+:: Try 'py' first (Windows Python Launcher - most reliable)
+py --version >nul 2>&1
+if not errorlevel 1 (
+    set PYTHON_CMD=py
+    goto :python_found
 )
 
+:: Try 'python'
+python --version >nul 2>&1
+if not errorlevel 1 (
+    set PYTHON_CMD=python
+    goto :python_found
+)
+
+:: Try 'python3'
+python3 --version >nul 2>&1
+if not errorlevel 1 (
+    set PYTHON_CMD=python3
+    goto :python_found
+)
+
+:: Python not found
+echo [ERROR] Python is not installed or not in PATH.
+echo.
+echo Please install Python 3.10 or higher from:
+echo   https://www.python.org/downloads/
+echo.
+echo Make sure to check "Add Python to PATH" during installation.
+echo.
+pause
+exit /b 1
+
+:python_found
 :: Check Python version (need 3.10+)
-for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set PYTHON_VERSION=%%v
+for /f "tokens=2 delims= " %%v in ('!PYTHON_CMD! --version 2^>^&1') do set PYTHON_VERSION=%%v
 for /f "tokens=1,2 delims=." %%a in ("!PYTHON_VERSION!") do (
     set PYTHON_MAJOR=%%a
     set PYTHON_MINOR=%%b
@@ -49,7 +71,7 @@ if !PYTHON_MAJOR! EQU 3 if !PYTHON_MINOR! LSS 10 (
     pause
     exit /b 1
 )
-echo   Python !PYTHON_VERSION! - OK
+echo   Python !PYTHON_VERSION! [!PYTHON_CMD!] - OK
 
 :: Check Node.js
 echo Checking Node.js installation...
@@ -104,7 +126,7 @@ echo [2/6] Creating Python virtual environment...
 if exist .venv (
     echo   Virtual environment already exists, skipping...
 ) else (
-    python -m venv .venv
+    !PYTHON_CMD! -m venv .venv
     if errorlevel 1 (
         echo [ERROR] Failed to create virtual environment.
         pause
