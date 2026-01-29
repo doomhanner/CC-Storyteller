@@ -1,6 +1,12 @@
 @echo off
 setlocal enabledelayedexpansion
 
+:: Keep window open on any error
+if "%~1"=="" (
+    cmd /k "%~f0" run
+    exit /b
+)
+
 echo.
 echo ============================================
 echo    CC-Storyteller Installation
@@ -9,6 +15,14 @@ echo.
 
 :: Change to project root directory
 cd /d "%~dp0.."
+if errorlevel 1 (
+    echo [ERROR] Failed to change to project directory.
+    echo Current directory: %CD%
+    echo Script directory: %~dp0
+    goto :end
+)
+echo Working directory: %CD%
+echo.
 
 :: ==========================================
 :: Check Prerequisites
@@ -50,8 +64,7 @@ echo   https://www.python.org/downloads/
 echo.
 echo Make sure to check "Add Python to PATH" during installation.
 echo.
-pause
-exit /b 1
+goto :end
 
 :python_found
 :: Check Python version (need 3.10+)
@@ -63,13 +76,11 @@ for /f "tokens=1,2 delims=." %%a in ("!PYTHON_VERSION!") do (
 
 if !PYTHON_MAJOR! LSS 3 (
     echo [ERROR] Python 3.10+ required. Found: !PYTHON_VERSION!
-    pause
-    exit /b 1
+    goto :end
 )
 if !PYTHON_MAJOR! EQU 3 if !PYTHON_MINOR! LSS 10 (
     echo [ERROR] Python 3.10+ required. Found: !PYTHON_VERSION!
-    pause
-    exit /b 1
+    goto :end
 )
 echo   Python !PYTHON_VERSION! [!PYTHON_CMD!] - OK
 
@@ -82,8 +93,7 @@ if errorlevel 1 (
     echo Please install Node.js 18 or higher from:
     echo   https://nodejs.org/
     echo.
-    pause
-    exit /b 1
+    goto :end
 )
 
 :: Check Node version (need 18+)
@@ -98,8 +108,7 @@ for /f "tokens=1 delims=." %%a in ('node --version') do (
 
 if !NODE_VER! LSS 18 (
     echo [ERROR] Node.js 18+ required. Found: !NODE_VER!
-    pause
-    exit /b 1
+    goto :end
 )
 echo   Node.js - OK
 
@@ -108,8 +117,7 @@ echo Checking npm installation...
 npm --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] npm is not installed.
-    pause
-    exit /b 1
+    goto :end
 )
 echo   npm - OK
 
@@ -129,8 +137,7 @@ if exist .venv (
     !PYTHON_CMD! -m venv .venv
     if errorlevel 1 (
         echo [ERROR] Failed to create virtual environment.
-        pause
-        exit /b 1
+        goto :end
     )
     echo   Created .venv
 )
@@ -149,8 +156,7 @@ pip install --upgrade pip >nul 2>&1
 pip install -e .
 if errorlevel 1 (
     echo [ERROR] Failed to install Python dependencies.
-    pause
-    exit /b 1
+    goto :end
 )
 echo.
 echo   Python dependencies installed!
@@ -168,8 +174,7 @@ call npm install
 if errorlevel 1 (
     echo [ERROR] Failed to install Node dependencies.
     cd ..
-    pause
-    exit /b 1
+    goto :end
 )
 cd ..
 echo.
@@ -188,8 +193,7 @@ call npm run build
 if errorlevel 1 (
     echo [ERROR] Failed to build frontend.
     cd ..
-    pause
-    exit /b 1
+    goto :end
 )
 cd ..
 echo.
@@ -239,4 +243,7 @@ echo   scripts\start.bat
 echo.
 echo Or double-click start.bat in the scripts folder.
 echo.
+
+:end
 pause
+exit /b
