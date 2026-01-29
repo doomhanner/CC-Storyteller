@@ -350,6 +350,35 @@ def config() -> None:
     console.print(table)
 
 
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
+    port: int = typer.Option(8000, "--port", "-p", help="Port to bind to"),
+    reload: bool = typer.Option(False, "--reload", "-r", help="Enable auto-reload"),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug mode"),
+) -> None:
+    """Start the web UI server."""
+    import uvicorn
+
+    console.print(
+        Panel(
+            "[bold]CC-Storyteller Web Server[/bold]\n"
+            f"[dim]Starting at http://{host}:{port}[/dim]",
+            border_style="green",
+        )
+    )
+
+    console.print("\n[dim]Press Ctrl+C to stop the server[/dim]\n")
+
+    uvicorn.run(
+        "storyteller.api.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="debug" if debug else "info",
+    )
+
+
 # ==================== Internal Functions ====================
 
 
