@@ -169,6 +169,14 @@ WS /api/sessions/{id}/stream
 3. Create Settings page with provider configuration UI
 4. Implement connection test functionality
 
+### Phase 1.5: Launcher Scripts & First-Run (Current Focus)
+
+- Create install.bat/sh with prerequisite checking
+- Create start.bat/sh with auto-browser-open
+- Configure FastAPI to serve built frontend static files
+- Add first-run setup wizard at `/setup`
+- Add setup status API endpoint
+
 ### Phase 2: Feature Parity
 
 - Port Chronicle (gameplay) screen to web
@@ -282,6 +290,83 @@ GET    /api/codex/{campaign}/relationships # Get relationship graph
 
 ---
 
+## Launcher Scripts (Phase 1.5)
+
+### Goal
+Make the app user-friendly with simple batch/shell scripts. Users run one script to install, one to start.
+
+### Architecture Change
+- Build Svelte frontend to static files (`npm run build` → `frontend/dist/`)
+- FastAPI serves static files directly
+- **Single server** - users just run `start.bat` and open browser
+
+### Scripts to Create
+
+```
+scripts/
+├── install.bat          # Windows installer
+├── install.sh           # Linux/Mac installer
+├── start.bat            # Windows launcher
+├── start.sh             # Linux/Mac launcher
+└── dev.bat / dev.sh     # Development mode (optional)
+```
+
+### install.bat / install.sh
+1. **Check prerequisites**
+   - Python 3.10+ installed? If not, show download link
+   - Node.js 18+ installed? If not, show download link
+2. **Create virtual environment**
+   - `python -m venv .venv`
+3. **Install Python dependencies**
+   - `.venv\Scripts\pip install -e .`
+4. **Install Node dependencies**
+   - `cd frontend && npm install`
+5. **Build frontend**
+   - `npm run build`
+6. **Create .env template** (if not exists)
+   - Copy `.env.example` to `.env`
+7. **Success message**
+   - "Installation complete! Run start.bat to launch."
+
+### start.bat / start.sh
+1. **Activate venv**
+2. **Check if first run** (no API keys configured)
+   - If first run, open browser to `/setup` (first-run wizard)
+   - Otherwise, open browser to `/`
+3. **Start server**
+   - `storyteller serve --host 127.0.0.1 --port 8000`
+4. **Open browser automatically**
+   - Windows: `start http://localhost:8000`
+   - Linux/Mac: `xdg-open` / `open`
+
+### First-Run Setup Wizard
+**Purpose:** Technical setup only (not campaign creation)
+
+**Route:** `/setup` (redirects here if no API keys configured)
+
+**Steps:**
+1. **Welcome** - Brief intro to CC-Storyteller
+2. **Provider Selection** - Choose primary provider (Anthropic/OpenAI/Ollama)
+3. **API Key Entry** - Enter key, with "Get API Key" links
+4. **Connection Test** - Verify it works
+5. **Model Selection** - Choose models for Storyteller/Archivist roles
+6. **Complete** - "Setup complete! Start your first chronicle."
+
+**Technical:** Wizard saves to `.env` (secrets) and `config.yaml` (preferences)
+
+### Files to Modify
+
+**Backend:**
+- `src/storyteller/api/app.py` - Add static file serving from `frontend/dist/`
+- `src/storyteller/api/routes/settings.py` - Add `/api/setup/status` endpoint
+
+**Frontend:**
+- `frontend/src/routes/Setup.svelte` - New first-run wizard component
+- `frontend/src/App.svelte` - Add `/setup` route
+- `frontend/vite.config.js` - Configure build output
+
+---
+
 ## Verification Plan
 
 After Phase 1:
@@ -292,3 +377,10 @@ After Phase 1:
 5. Save settings, restart server, verify persistence in `config.yaml`
 6. Verify "Chronicle" theme renders correctly
 7. Check API endpoints work: `curl http://localhost:8000/api/settings`
+
+After Phase 1.5 (Launcher Scripts):
+1. Run `install.bat` on fresh system - verify prerequisites check works
+2. Run `start.bat` - verify server starts and browser opens
+3. On first run, verify redirect to `/setup` wizard
+4. Complete wizard, verify `.env` and `config.yaml` created
+5. Restart with `start.bat` - verify goes to home page (not setup)
