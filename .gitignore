@@ -53,3 +53,6 @@ storyteller.db
 
 # Keep example files
 !.env.example
+
+# Keep frontend lib directory
+!frontend/src/lib/
