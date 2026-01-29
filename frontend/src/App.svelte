@@ -8,50 +8,73 @@
   import Campaigns from './routes/Campaigns.svelte';
   import Chronicle from './routes/Chronicle.svelte';
   import Codex from './routes/Codex.svelte';
+  import Setup from './routes/Setup.svelte';
 
   export let url = '';
 
+  // Track current path for conditional layout
+  let currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+
+  // Update path on navigation
+  function handleNavigation() {
+    currentPath = window.location.pathname;
+  }
+
+  // Listen for navigation events
+  if (typeof window !== 'undefined') {
+    window.addEventListener('popstate', handleNavigation);
+  }
+
   // Apply theme
   $: document.documentElement.setAttribute('data-theme', $theme);
+
+  // Check if we're on the setup page (full-page layout, no sidebar)
+  $: isSetupPage = currentPath === '/setup';
 </script>
 
-<Router {url}>
-  <div class="app-layout">
-    <nav class="sidebar">
-      <div class="sidebar-header">
-        <h1 class="logo">Chronicle</h1>
-        <p class="tagline">CC-Storyteller</p>
-      </div>
+<Router {url} on:routeLoaded={handleNavigation}>
+  {#if isSetupPage}
+    <!-- Setup page has its own full-page layout -->
+    <Route path="/setup" component={Setup} />
+  {:else}
+    <div class="app-layout">
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <h1 class="logo">Chronicle</h1>
+          <p class="tagline">CC-Storyteller</p>
+        </div>
 
-      <ul class="nav-links">
-        <li>
-          <Link to="/">Hall of Chronicles</Link>
-        </li>
-        <li>
-          <Link to="/campaigns">Campaigns</Link>
-        </li>
-        <li>
-          <Link to="/settings">Settings</Link>
-        </li>
-      </ul>
+        <ul class="nav-links">
+          <li>
+            <Link to="/">Hall of Chronicles</Link>
+          </li>
+          <li>
+            <Link to="/campaigns">Campaigns</Link>
+          </li>
+          <li>
+            <Link to="/settings">Settings</Link>
+          </li>
+        </ul>
 
-      <div class="sidebar-footer">
-        <p class="version">v0.1.0</p>
-      </div>
-    </nav>
+        <div class="sidebar-footer">
+          <p class="version">v0.1.0</p>
+        </div>
+      </nav>
 
-    <main class="main-content">
-      <Route path="/" component={Home} />
-      <Route path="/settings" component={Settings} />
-      <Route path="/campaigns" component={Campaigns} />
-      <Route path="/chronicle/:campaignId" let:params>
-        <Chronicle campaignId={params.campaignId} />
-      </Route>
-      <Route path="/codex/:campaignId" let:params>
-        <Codex campaignId={params.campaignId} />
-      </Route>
-    </main>
-  </div>
+      <main class="main-content">
+        <Route path="/" component={Home} />
+        <Route path="/setup" component={Setup} />
+        <Route path="/settings" component={Settings} />
+        <Route path="/campaigns" component={Campaigns} />
+        <Route path="/chronicle/:campaignId" let:params>
+          <Chronicle campaignId={params.campaignId} />
+        </Route>
+        <Route path="/codex/:campaignId" let:params>
+          <Codex campaignId={params.campaignId} />
+        </Route>
+      </main>
+    </div>
+  {/if}
 </Router>
 
 <style>

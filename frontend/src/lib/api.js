@@ -202,6 +202,31 @@ export const sessionsApi = {
   },
 };
 
+// ==================== Setup API ====================
+
+export const setupApi = {
+  /**
+   * Get setup status.
+   * @returns {Promise<object>} Setup status
+   */
+  async getStatus() {
+    return request('/setup/status');
+  },
+
+  /**
+   * Save API key during setup.
+   * @param {string} provider - Provider type
+   * @param {string} apiKey - API key
+   * @returns {Promise<object>} Save result
+   */
+  async saveApiKey(provider, apiKey) {
+    return request('/setup/api-key', {
+      method: 'POST',
+      body: { provider, api_key: apiKey },
+    });
+  },
+};
+
 // ==================== Codex API ====================
 
 export const codexApi = {

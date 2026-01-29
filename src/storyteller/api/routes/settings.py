@@ -1,9 +1,11 @@
 """Settings API routes."""
 
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from storyteller.api.deps import AppSettings, YamlConfigLoader
 from storyteller.api.schemas import (
@@ -18,6 +20,7 @@ from storyteller.providers.base import ChatMessage, ProviderConfig
 from storyteller.providers.base import ProviderType as BaseProviderType
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+setup_router = APIRouter(prefix="/setup", tags=["setup"])
 
 
 # Known models for each provider
@@ -224,3 +227,76 @@ async def list_providers(settings: AppSettings) -> list[ProviderInfo]:
 async def list_models(provider_type: ProviderType) -> list[str]:
     """List available models for a provider."""
     return PROVIDER_MODELS.get(provider_type, [])
+
+
+# ==================== Setup Router ====================
+
+
+class ApiKeySaveRequest(BaseModel):
+    """Request to save an API key."""
+
+    provider: str
+    api_key: str
+
+
+class ApiKeySaveResponse(BaseModel):
+    """Response from saving an API key."""
+
+    success: bool
+    message: str
+
+
+@setup_router.post("/api-key", response_model=ApiKeySaveResponse)
+async def save_api_key(request: ApiKeySaveRequest) -> ApiKeySaveResponse:
+    """
+    Save an API key to the .env file.
+
+    This is used during the first-run setup wizard.
+    """
+    env_path = Path.cwd() / ".env"
+
+    # Map provider to env var name
+    provider_env_map = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "google": "GOOGLE_API_KEY",
+    }
+
+    env_var = provider_env_map.get(request.provider.lower())
+    if not env_var:
+        return ApiKeySaveResponse(
+            success=False,
+            message=f"Unknown provider: {request.provider}",
+        )
+
+    try:
+        # Read existing .env content
+        existing_content = {}
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, value = line.split("=", 1)
+                        existing_content[key.strip()] = value.strip()
+
+        # Update the key
+        existing_content[env_var] = request.api_key
+
+        # Write back to .env
+        with open(env_path, "w") as f:
+            f.write("# CC-Storyteller Environment Variables\n")
+            f.write("# API keys for LLM providers\n\n")
+            for key, value in existing_content.items():
+                f.write(f"{key}={value}\n")
+
+        return ApiKeySaveResponse(
+            success=True,
+            message=f"API key saved for {request.provider}",
+        )
+
+    except Exception as e:
+        return ApiKeySaveResponse(
+            success=False,
+            message=f"Failed to save API key: {str(e)}",
+        )
