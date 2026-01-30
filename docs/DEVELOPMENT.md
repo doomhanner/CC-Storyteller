@@ -25,6 +25,18 @@
 3. Document any incomplete work in "Handoff Notes"
 4. Commit this file with your other changes
 
+### Using Plan Files
+For complex features, create detailed plans in `docs/plans/`:
+1. Create a new file: `docs/plans/<feature-name>.md`
+2. Document architecture decisions, API designs, implementation steps
+3. Reference the plan file from Feature Status section below
+4. Keep plans updated as implementation progresses
+
+**Existing Plans:**
+| Plan File | Covers |
+|-----------|--------|
+| [`web-ui-implementation.md`](plans/web-ui-implementation.md) | Phases 1, 1.5, 2, 3 - Web UI architecture |
+
 ---
 
 ## Project Overview
@@ -105,8 +117,9 @@ CC-Storyteller/
 │   ├── install.bat/sh       # Installation
 │   └── start.bat/sh         # Launch app
 ├── docs/
-│   ├── DEVELOPMENT.md       # THIS FILE
-│   └── plans/               # Implementation plans
+│   ├── DEVELOPMENT.md       # THIS FILE - start here
+│   └── plans/               # Detailed feature plans
+│       └── web-ui-implementation.md  # Web UI phases 1-3
 └── pyproject.toml
 ```
 
@@ -115,6 +128,8 @@ CC-Storyteller/
 ## Feature Status
 
 ### Phase 1: Foundation ✅ COMPLETE
+> 📄 **Plan:** [`web-ui-implementation.md`](plans/web-ui-implementation.md)
+
 - [x] FastAPI backend structure
 - [x] API routes (settings, campaigns, codex, sessions)
 - [x] Pydantic schemas for API
@@ -129,6 +144,8 @@ CC-Storyteller/
 - [x] WebSocket endpoint for streaming
 
 ### Phase 1.5: Launcher Scripts ✅ COMPLETE
+> 📄 **Plan:** [`web-ui-implementation.md`](plans/web-ui-implementation.md#launcher-scripts-phase-15)
+
 - [x] install.bat with Python/Node detection
 - [x] install.sh for Linux/Mac
 - [x] start.bat with auto-browser-open
@@ -139,6 +156,8 @@ CC-Storyteller/
 - [x] API key save endpoint
 
 ### Phase 2: Feature Parity 🔄 IN PROGRESS
+> 📄 **Plan:** [`web-ui-implementation.md`](plans/web-ui-implementation.md#phase-2-feature-parity)
+
 - [ ] Streaming LLM responses (generate_stream in providers)
 - [ ] Real WebSocket streaming in Chronicle
 - [ ] Relationship graph visualization (D3.js)
@@ -146,6 +165,8 @@ CC-Storyteller/
 - [ ] Creativity sliders for generation
 
 ### Phase 3: Enhancements 📋 PLANNED
+> 📄 **Plan:** [`web-ui-implementation.md`](plans/web-ui-implementation.md#phase-3-enhancements)
+
 - [ ] Additional themes (Eldritch, etc.)
 - [ ] AI-generated UI elements
 - [ ] Advanced entity editing in Codex
